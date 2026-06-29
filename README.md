@@ -179,6 +179,8 @@ Phase 5 — Native Bridge Reachability [PARTIAL]
 6. `loadCallback` → `$(document.body).html(content)` → payload fires.
 7. Attacker server receives exfiltrated data silently.
 
+> **Note on platform scope of the PoC:** The executable proof of concept above targets the **Android** build, which is the 0-click case (background `DownloadingService`). The **iOS** counterpart (Pocket iOS v4.5.2 / `ReadItLaterPro.app`) shares the **identical vulnerable `loadCallback()` sink** in a file of the same name, but reaches native code through a different bridge mechanism (the `x-ril-cmd:` URL-scheme intercepted by the `UIWebView` delegate) and degrades to a 1-click case (the user must open a saved article). The iOS evidence is established by **static analysis** of the shipped app bundle and is documented in full in [`iOS_forensic_analysis_v4.5.2.md`](./iOS_forensic_analysis_v4.5.2.md) in this repository. No separate executable iOS PoC is published; the shared-codebase analysis demonstrates the equivalence of the sink across both platforms.
+
 ---
 
 ## 5. CVSS v4.0 Vector Decomposition
@@ -234,9 +236,10 @@ The defect described in §3 is not a regression introduced in a late Android rel
 
 The iOS application bundle is named **`ReadItLaterPro.app`** — the pre-rebrand product name used by Read It Later, Inc. before the company publicly renamed the app to *Pocket* on **17 April 2012**. The bundle targets iOS 5.0+, placing the codebase in the 2011–early 2012 timeframe.
 
-Forensic analysis of this iOS bundle confirms a **character-for-character identical** vulnerable pattern in a file with the **same name** as the Android version:
+Forensic analysis of this iOS bundle confirms a **character-for-character identical** vulnerable pattern in a file with the **same name** as the Android version. The complete iOS forensic analysis — vulnerable sink, content pipeline, native bridge, telemetry inventory, and evidence references — is published in this repository as [`iOS_forensic_analysis_v4.5.2.md`](./iOS_forensic_analysis_v4.5.2.md).
 
 **File:** `manifest/cache/j/articleview-mobile.js` (iOS) — same filename as `assets/html/j/articleview-mobile.js` (Android)
+
 **Lines 97–107 (iOS):**
 
 ```javascript
@@ -281,9 +284,9 @@ When `isAndroid === false` the iOS bridge path executes; when `true` the Android
 | Background auto-render | Yes — `DownloadingService` on `BOOT_COMPLETED` | No — article must be opened by user |
 | User interaction required | None (0-click) | Open article (1-click) |
 | Article transport | HTTPS | **HTTP plaintext** (`http://text.getpocket.com/v3beta/mobile`) — additional MITM injection vector |
-| WebView technology | Modern Android WebView | UIWebView (deprecated iOS 8, removed iOS 15) |
+| WebView technology | Modern Android WebView | UIWebView (deprecated iOS 12; not accepted by App Store since 2020) |
 
-The iOS variant is documented in detail in a separate forensic analysis. A separate CVE record for the iOS counterpart will be requested via an appropriate CNA, as it concerns a distinct product+version+platform.
+**Note on UIWebView timeline:** Apple introduced `WKWebView` as the successor in iOS 8 (2014). `UIWebView` was formally deprecated in iOS 12 (2018). The App Store stopped accepting new apps using `UIWebView` in April 2020 and updates to existing apps in December 2020. `UIWebView` was never formally removed from the SDK — it remains present but is no longer accepted for App Store submissions. Its security weaknesses relevant here are that it runs in-process (no separate WebContent process), has no Content Security Policy support, and executes injected JavaScript synchronously on the main thread via `stringByEvaluatingJavaScriptFromString:`.
 
 ### 7.4 Implication
 
@@ -331,6 +334,7 @@ No vendor mitigations exist or are forthcoming.
 3. iOS counterpart bundle acquired and analyzed
    └── ReadItLaterPro.app (Pocket iOS v4.5.2)
        └── manifest/cache/j/articleview-mobile.js (XSS — lines 97–107)
+       └── full analysis: iOS_forensic_analysis_v4.5.2.md
 
 4. Vendor communication record
    └── Original emails verified: POCKET_MAIL.pdf, POCKET_MAIL1.pdf, CRONO2.pdf
@@ -393,8 +397,9 @@ bundle (ReadItLaterPro.app, v4.5.2, circa 2012), evidencing
 - jQuery `.html()` behavior: https://api.jquery.com/html/
 - Android `addJavascriptInterface`: https://developer.android.com/reference/android/webkit/WebView#addJavascriptInterface(java.lang.Object,%20java.lang.String)
 - Apple — `UIWebView` deprecation: https://developer.apple.com/documentation/uikit/uiwebview
+- Apple — Updating Apps that Use Web Views (App Store UIWebView deadlines): https://developer.apple.com/news/?id=12232019b
 - Read It Later → Pocket rebrand (17 April 2012): https://blog.getpocket.com/2012/04/introducing-the-all-new-read-it-later-now-called-pocket/
 
 ---
 
-*Ing. Zampier Zago — info@zampier.it*
+*Ing. Zampier Zago — info@zampier.it — https://github.com/FUNFACTOR1*
